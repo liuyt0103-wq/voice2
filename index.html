@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>频谱实验室 - 专业音频分析仪</title>
+    <title>SpectraLab - 视频录制版</title>
     <style>
         :root {
             --bg-color: #050505;
-            --accent-color: #4df0d0; /* 青色 */
+            --accent-color: #4df0d0;
             --dim-color: #1a3a35;
             --text-color: #4df0d0;
             --record-red: #ff4b4b;
@@ -16,8 +16,7 @@
         body {
             background-color: var(--bg-color);
             color: var(--text-color);
-            /* 使用等宽字体保持科技感 */
-            font-family: 'Consolas', 'Monaco', 'PingFang SC', 'Microsoft YaHei', monospace;
+            font-family: 'Consolas', 'PingFang SC', monospace;
             margin: 0;
             display: flex;
             justify-content: center;
@@ -28,112 +27,91 @@
         }
 
         #app-container {
-            width: 360px;
-            height: 760px;
+            width: 350px;
+            height: 750px;
             border: 2px solid #222;
-            border-radius: 45px;
-            padding: 25px;
+            border-radius: 40px;
+            padding: 20px;
             background: #000;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 0 80px rgba(0,0,0,0.8);
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
             position: relative;
         }
 
-        /* 顶部状态栏 */
-        .header { margin-bottom: 20px; }
-        .brand { 
-            font-weight: 900; 
-            font-size: 1.1rem; 
-            display: flex; 
-            justify-content: space-between; 
-            letter-spacing: 1px;
-        }
-        .rec-indicator { font-size: 0.8rem; color: #555; transition: 0.3s; }
-        .rec-active { color: var(--record-red); }
+        .header { margin-bottom: 15px; }
+        .brand { font-weight: bold; font-size: 1.1rem; display: flex; justify-content: space-between; }
+        .rec-status { font-size: 0.8rem; color: #444; }
+        .rec-active { color: var(--record-red); animation: blink 1s infinite; }
 
-        /* 音量条 */
-        .audio-level-container { margin: 15px 0; }
-        .label { font-size: 0.7rem; margin-bottom: 6px; color: var(--text-color); opacity: 0.8; letter-spacing: 1px;}
-        .level-bar-bg { height: 16px; background: var(--dim-color); width: 100%; position: relative; border-radius: 2px; }
+        @keyframes blink { 50% { opacity: 0.3; } }
+
+        .audio-level-container { margin: 10px 0; }
+        .label { font-size: 0.65rem; margin-bottom: 5px; opacity: 0.8; }
+        .level-bar-bg { height: 12px; background: var(--dim-color); width: 100%; border-radius: 2px; }
         #level-bar-fill { height: 100%; background: var(--accent-color); width: 0%; transition: width 0.1s; }
 
-        /* 控制按钮 */
         .controls {
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 25px;
-            margin: 15px 0 25px 0;
+            gap: 20px;
+            margin: 15px 0;
         }
 
         .btn-circle {
-            width: 48px; height: 48px;
+            width: 50px; height: 50px;
             border-radius: 50%;
             border: 1px solid var(--accent-color);
             background: transparent;
             color: var(--accent-color);
             cursor: pointer;
             display: flex; justify-content: center; align-items: center;
-            font-size: 1.2rem;
-            transition: 0.2s;
+            font-size: 0.8rem;
         }
-        .btn-circle:active { transform: scale(0.9); background: var(--dim-color); }
 
-        #record-btn {
-            width: 75px; height: 75px;
+        #main-btn {
+            width: 70px; height: 70px;
             background: var(--record-red);
             border: none;
             color: white;
             font-weight: bold;
-            font-size: 0.9rem;
-            box-shadow: 0 0 15px rgba(255, 75, 75, 0.3);
         }
 
-        /* 可视化区域 */
+        #save-btn {
+            background: var(--dim-color);
+            border: 1px solid var(--accent-color);
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        #save-btn.ready { opacity: 1; pointer-events: auto; background: #222; }
+
         .viz-section {
             flex: 1;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
         }
 
         .canvas-box {
             border: 1px solid #111;
             position: relative;
-            background: rgba(10, 10, 10, 0.8);
-            border-radius: 4px;
+            background: rgba(255,255,255,0.02);
         }
 
-        canvas { width: 100%; height: 95px; display: block; }
-        .canvas-label { 
-            position: absolute; top: 4px; left: 6px; 
-            font-size: 0.6rem; color: var(--accent-color); 
-            opacity: 0.7; z-index: 10;
-        }
+        canvas { width: 100%; height: 90px; display: block; }
+        .canvas-label { position: absolute; top: 2px; left: 5px; font-size: 0.5rem; opacity: 0.6; }
 
-        /* 数据显示 */
         .stats {
-            font-size: 0.75rem;
-            line-height: 1.6;
+            font-size: 0.7rem;
+            line-height: 1.5;
             margin-top: 15px;
             padding: 10px;
             border-top: 1px solid #111;
-            color: var(--accent-color);
-        }
-        .stats b { color: #fff; font-weight: normal; }
-
-        .footer {
-            text-align: center;
-            font-size: 0.6rem;
-            margin-top: 10px;
-            opacity: 0.4;
-            letter-spacing: 2px;
         }
 
-        /* 动画 */
-        .blink { animation: blink-animation 1s steps(5, start) infinite; }
-        @keyframes blink-animation { to { visibility: hidden; } }
+        /* 隐藏的导出画布，用于合成视频 */
+        #export-canvas { display: none; }
     </style>
 </head>
 <body>
@@ -141,222 +119,240 @@
 <div id="app-container">
     <div class="header">
         <div class="brand">
-            <span>频谱实验室 SPECTRALAB</span>
-            <span id="rec-status" class="rec-indicator">● 录制中</span>
+            <span>SPECTRALAB PRO</span>
+            <span id="rec-indicator" class="rec-status">● 录制中</span>
         </div>
         <div class="audio-level-container">
-            <div class="label">输入电平 <span id="db-value" style="float:right">-80.0 DB</span></div>
-            <div class="level-bar-bg">
-                <div id="level-bar-fill"></div>
-            </div>
+            <div class="label">实时增益: <span id="db-value">-80.0 DB</span></div>
+            <div class="level-bar-bg"><div id="level-bar-fill"></div></div>
         </div>
     </div>
 
     <div class="controls">
-        <button class="btn-circle" title="设置">⚙</button>
-        <button id="record-btn" class="btn-circle">开始解析</button>
-        <button class="btn-circle" title="切换模式">♒</button>
+        <button class="btn-circle" onclick="location.reload()">重置</button>
+        <button id="main-btn" class="btn-circle">开始</button>
+        <button id="save-btn" class="btn-circle">保存</button>
     </div>
 
-    <div class="viz-section">
-        <!-- 时域波形 -->
+    <div class="viz-section" id="record-area">
         <div class="canvas-box">
-            <div class="canvas-label">实时波形 (WAVEFORM)</div>
-            <canvas id="waveformCanvas"></canvas>
+            <div class="canvas-label">WAVEFORM 波形</div>
+            <canvas id="waveCanvas"></canvas>
         </div>
-        
-        <!-- 频谱图 -->
         <div class="canvas-box">
-            <div class="canvas-label">频谱解析 (SPECTRUM)</div>
-            <canvas id="spectrumCanvas"></canvas>
+            <div class="canvas-label">SPECTRUM 频谱</div>
+            <canvas id="specCanvas"></canvas>
         </div>
-        
-        <!-- 粒子系统 -->
-        <div class="canvas-box" style="height: 140px;">
-            <div class="canvas-label">频率粒子 (PARTICLES)</div>
-            <canvas id="particleCanvas" style="height: 140px;"></canvas>
+        <div class="canvas-box" style="height: 150px;">
+            <div class="canvas-label">PARTICLES 能量粒子</div>
+            <canvas id="partCanvas" style="height: 150px;"></canvas>
         </div>
     </div>
 
     <div class="stats">
-        <div>峰值频率: <b id="peak-hz">0.0 HZ</b></div>
-        <div>主导频段: <b id="dom-hz">129, 86, 43 HZ</b></div>
-        <div>频带能量: 低:<b id="band-l">-0.0</b> 中:<b id="band-m">-0.0</b> 高:<b id="band-h">-0.0</b></div>
-    </div>
-
-    <div class="footer">
-        系统状态: 保持常亮
+        <div>峰值频率: <span id="peak-hz">0.0 HZ</span></div>
+        <div>状态: <span id="status-text">待机中</span></div>
+        <div style="font-size: 0.6rem; margin-top: 5px; opacity: 0.5;">支持导出同步音频视频文件</div>
     </div>
 </div>
 
+<!-- 用于视频合成的隐藏画布 -->
+<canvas id="export-canvas" width="400" height="800"></canvas>
+
 <script>
-    let audioCtx;
-    let analyser;
-    let source;
-    let dataArray;
-    let bufferLength;
+    let audioCtx, analyser, dataArray, source, stream;
+    let mediaRecorder;
+    let recordedChunks = [];
     let isRecording = false;
 
-    const recordBtn = document.getElementById('record-btn');
-    const levelFill = document.getElementById('level-bar-fill');
-    const dbValue = document.getElementById('db-value');
-    const recStatus = document.getElementById('rec-status');
-    
-    // 画布初始化
-    const waveCanvas = document.getElementById('waveformCanvas');
-    const specCanvas = document.getElementById('spectrumCanvas');
-    const partCanvas = document.getElementById('particleCanvas');
-    const waveCtx = waveCanvas.getContext('2d');
-    const specCtx = specCanvas.getContext('2d');
-    const partCtx = partCanvas.getContext('2d');
+    const mainBtn = document.getElementById('main-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const statusText = document.getElementById('status-text');
+    const recIndicator = document.getElementById('rec-indicator');
 
-    function resize() {
-        const dpr = window.devicePixelRatio || 1;
-        [waveCanvas, specCanvas, partCanvas].forEach(c => {
-            c.width = c.clientWidth * dpr;
-            c.height = c.clientHeight * dpr;
-        });
-    }
-    window.addEventListener('resize', resize);
-    resize();
+    const waveCanvas = document.getElementById('waveCanvas');
+    const specCanvas = document.getElementById('specCanvas');
+    const partCanvas = document.getElementById('partCanvas');
+    const exportCanvas = document.getElementById('export-canvas');
+    const exCtx = exportCanvas.getContext('2d');
 
-    // 粒子逻辑
+    // 粒子系统增强版
     class Particle {
-        constructor() {
-            this.reset();
-        }
+        constructor() { this.reset(); }
         reset() {
             this.x = Math.random() * partCanvas.width;
             this.y = Math.random() * partCanvas.height;
-            this.vx = (Math.random() - 0.5) * 1.5;
-            this.vy = (Math.random() - 0.5) * 1.5;
-            this.size = Math.random() * 2 + 1;
+            this.vx = (Math.random() - 0.5) * 2;
+            this.vy = (Math.random() - 0.5) * 2;
+            this.baseSize = Math.random() * 2 + 1;
+            this.size = this.baseSize;
         }
         update(energy) {
-            const speedScale = 1 + (energy / 30);
-            this.x += this.vx * speedScale;
-            this.y += this.vy * speedScale;
+            // 能量越大，震动越剧烈，尺寸越大
+            const multiplier = 1 + (energy / 40);
+            this.x += this.vx * multiplier;
+            this.y += this.vy * multiplier;
+            this.size = this.baseSize * (1 + energy/60);
 
             if(this.x < 0 || this.x > partCanvas.width) this.vx *= -1;
             if(this.y < 0 || this.y > partCanvas.height) this.vy *= -1;
         }
         draw(ctx) {
             ctx.fillStyle = '#4df0d0';
+            ctx.shadowBlur = this.size * 2;
+            ctx.shadowColor = '#4df0d0';
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             ctx.fill();
+            ctx.shadowBlur = 0;
         }
     }
-    const particles = Array.from({length: 50}, () => new Particle());
+    const particles = Array.from({length: 60}, () => new Particle());
 
-    // 按钮交互
-    recordBtn.onclick = async () => {
+    mainBtn.onclick = async () => {
         if (!isRecording) {
-            try {
-                await startAudio();
-                recordBtn.innerText = "停止解析";
-                recordBtn.style.background = "#222";
-                recStatus.classList.add('rec-active', 'blink');
-                isRecording = true;
-            } catch (err) {
-                alert("无法访问麦克风: " + err);
-            }
+            await startEngine();
+            startMediaRecorder();
+            mainBtn.innerText = "停止";
+            mainBtn.style.background = "#333";
+            statusText.innerText = "正在录制音频与画面...";
+            recIndicator.classList.add('rec-active');
+            saveBtn.classList.remove('ready');
+            isRecording = true;
         } else {
-            location.reload(); 
+            mediaRecorder.stop();
+            mainBtn.innerText = "完成";
+            mainBtn.disabled = true;
+            statusText.innerText = "解析完成，请点击保存导出视频";
+            recIndicator.classList.remove('rec-active');
+            isRecording = false;
         }
     };
 
-    async function startAudio() {
+    async function startEngine() {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         source = audioCtx.createMediaStreamSource(stream);
         analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 1024; // 采样率
+        analyser.fftSize = 1024;
         source.connect(analyser);
-
-        bufferLength = analyser.frequencyBinCount;
-        dataArray = new Uint8Array(bufferLength);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
         
-        renderFrame();
+        requestAnimationFrame(draw);
     }
 
-    function renderFrame() {
-        requestAnimationFrame(renderFrame);
-        const timeData = new Uint8Array(bufferLength);
+    function startMediaRecorder() {
+        // 1. 获取隐藏合并画布的视频流
+        const videoStream = exportCanvas.captureStream(30); // 30 FPS
+        
+        // 2. 合并麦克风音轨
+        const combinedStream = new MediaStream([
+            ...videoStream.getVideoTracks(),
+            ...stream.getAudioTracks()
+        ]);
+
+        // 3. 创建录制器 (优先使用 mp4, 备选 webm)
+        const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
+        mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
+
+        mediaRecorder.ondataavailable = e => {
+            if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+            saveBtn.classList.add('ready');
+            saveBtn.onclick = downloadVideo;
+        };
+
+        mediaRecorder.start();
+    }
+
+    function draw() {
+        if(!isRecording && mediaRecorder?.state === 'inactive') return;
+        requestAnimationFrame(draw);
+
+        const timeData = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteTimeDomainData(timeData);
         analyser.getByteFrequencyData(dataArray);
 
-        // 1. 计算分贝 (DB)
+        // 各画布绘制逻辑
+        renderWave(timeData);
+        renderSpec(dataArray);
+        renderParticles(dataArray);
+
+        // 合并到导出画布 (用于录制)
+        composeExportCanvas();
+
+        // UI 电平更新
         let sum = 0;
-        for(let i=0; i<bufferLength; i++) {
-            let val = (timeData[i] - 128) / 128;
-            sum += val * val;
+        for(let i=0; i<timeData.length; i++) {
+            let v = (timeData[i]-128)/128; sum += v*v;
         }
-        let rms = Math.sqrt(sum / bufferLength);
-        let db = 20 * Math.log10(rms || 0.000001);
-        let displayDb = Math.max(-80, db.toFixed(1));
-        levelFill.style.width = Math.min(100, (db + 80) * 1.25) + "%";
-        dbValue.innerText = displayDb + " DB";
-
-        // 2. 绘制波形图 (Waveform)
-        waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
-        waveCtx.strokeStyle = '#4df0d0';
-        waveCtx.lineWidth = 2;
-        waveCtx.beginPath();
-        let sliceWidth = waveCanvas.width / bufferLength;
-        let wx = 0;
-        for(let i = 0; i < bufferLength; i++) {
-            let v = timeData[i] / 128.0;
-            let wy = v * waveCanvas.height / 2;
-            if(i === 0) waveCtx.moveTo(wx, wy);
-            else waveCtx.lineTo(wx, wy);
-            wx += sliceWidth;
-        }
-        waveCtx.stroke();
-
-        // 3. 绘制频谱图 (Spectrum)
-        specCtx.clearRect(0, 0, specCanvas.width, specCanvas.height);
-        let barWidth = (specCanvas.width / (bufferLength / 2));
-        let sx = 0;
-        for(let i = 0; i < bufferLength / 2; i++) {
-            let barHeight = (dataArray[i] / 255) * specCanvas.height;
-            specCtx.fillStyle = `rgba(77, 240, 208, ${dataArray[i]/255 + 0.2})`;
-            specCtx.fillRect(sx, specCanvas.height - barHeight, barWidth - 1, barHeight);
-            sx += barWidth;
-        }
-
-        // 4. 绘制粒子动效 (Particles)
-        partCtx.fillStyle = 'rgba(5, 5, 5, 0.3)'; // 拖尾效果
-        partCtx.fillRect(0, 0, partCanvas.width, partCanvas.height);
-        let avgEnergy = dataArray.reduce((a,b) => a+b, 0) / bufferLength;
-        particles.forEach(p => {
-            p.update(avgEnergy);
-            p.draw(partCtx);
-        });
-
-        // 5. 更新数据看板
-        updateDataStats(dataArray);
+        let db = 20 * Math.log10(Math.sqrt(sum/timeData.length) || 0.00001);
+        document.getElementById('level-bar-fill').style.width = Math.min(100, (db+80)*1.2) + "%";
+        document.getElementById('db-value').innerText = db.toFixed(1) + " DB";
     }
 
-    function updateDataStats(data) {
-        // 查找峰值
-        let maxVal = 0, maxIdx = 0;
-        for(let i=0; i<data.length/2; i++) {
-            if(data[i] > maxVal) { maxVal = data[i]; maxIdx = i; }
+    function renderWave(data) {
+        const ctx = waveCanvas.getContext('2d');
+        ctx.clearRect(0,0,waveCanvas.width, waveCanvas.height);
+        ctx.strokeStyle = '#4df0d0';
+        ctx.beginPath();
+        let x = 0;
+        for(let i=0; i<data.length; i++) {
+            let y = (data[i]/255) * waveCanvas.height;
+            if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            x += waveCanvas.width/data.length;
         }
-        let peakHz = maxIdx * audioCtx.sampleRate / analyser.fftSize;
-        document.getElementById('peak-hz').innerText = peakHz.toFixed(1) + " HZ";
+        ctx.stroke();
+    }
 
-        // 简化计算低中高频段能量
-        let l = (data.slice(0, 5).reduce((a,b)=>a+b,0)/5).toFixed(1);
-        let m = (data.slice(20, 50).reduce((a,b)=>a+b,0)/30).toFixed(1);
-        let h = (data.slice(100, 200).reduce((a,b)=>a+b,0)/100).toFixed(1);
+    function renderSpec(data) {
+        const ctx = specCanvas.getContext('2d');
+        ctx.clearRect(0,0,specCanvas.width, specCanvas.height);
+        for(let i=0; i<data.length; i+=4) {
+            let h = (data[i]/255) * specCanvas.height;
+            ctx.fillStyle = `rgba(77, 240, 208, ${data[i]/255 + 0.1})`;
+            ctx.fillRect(i * (specCanvas.width/data.length)*4, specCanvas.height-h, 3, h);
+        }
+    }
+
+    function renderParticles(data) {
+        const ctx = partCanvas.getContext('2d');
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        ctx.fillRect(0,0,partCanvas.width, partCanvas.height);
+        let energy = data.slice(0, 20).reduce((a,b)=>a+b, 0) / 20; // 关注低频
+        particles.forEach(p => { p.update(energy); p.draw(ctx); });
+    }
+
+    function composeExportCanvas() {
+        exCtx.fillStyle = '#050505';
+        exCtx.fillRect(0,0,exportCanvas.width, exportCanvas.height);
         
-        document.getElementById('band-l').innerText = (l/10).toFixed(1);
-        document.getElementById('band-m').innerText = (m/10).toFixed(1);
-        document.getElementById('band-h').innerText = (h/10).toFixed(1);
+        // 绘制标题
+        exCtx.fillStyle = '#4df0d0';
+        exCtx.font = '20px Consolas';
+        exCtx.fillText("SPECTRALAB RECORDING", 20, 40);
+        
+        // 将各分屏贴到大画布上
+        exCtx.drawImage(waveCanvas, 20, 80, 360, 150);
+        exCtx.drawImage(specCanvas, 20, 250, 360, 150);
+        exCtx.drawImage(partCanvas, 20, 420, 360, 300);
+        
+        exCtx.font = '14px Consolas';
+        exCtx.fillText("PEAK: " + document.getElementById('peak-hz').innerText, 20, 760);
+    }
+
+    function downloadVideo() {
+        const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `SpectraLab_Record_${Date.now()}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
     }
 </script>
-
 </body>
 </html>
