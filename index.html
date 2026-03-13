@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Audio Workspace</title>
+    <style>
+        :root {
+            --bg-base: #F8FAFC;
+            --glass-white: rgba(255, 255, 255, 0.7);
+            --macaron-blue: #E0F2FE;
+            --macaron-green: #F0FDF4;
+            --macaron-pink: #FDF2F8;
+            --accent-text: #64748B;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background: var(--bg-base);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100dvh; /* 适配移动端高度 */
+            overflow: hidden;
+            font-family: -apple-system, sans-serif;
+        }
+
+        #app-container {
+            width: 100%;
+            max-width: 430px;
+            height: 100%;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            padding: env(safe-area-inset-top) 20px env(safe-area-inset-bottom) 20px;
+            position: relative;
+        }
+
+        /* 计时器 */
+        #timer {
+            text-align: center;
+            font-size: 38px;
+            font-weight: 300;
+            color: var(--accent-text);
+            margin: 40px 0 20px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 可视化显示框区域 */
+        .viz-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 10px 0;
+        }
+
+        .viz-box {
+            flex: 1;
+            background: var(--glass-white);
+            border: 1px solid rgba(255,255,255,0.8);
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.03);
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        canvas { width: 100%; height: 100%; display: block; }
+
+        /* 液态马卡龙控制面板 */
+        .control-bar {
+            background: rgba(255,255,255,0.6);
+            backdrop-filter: blur(20px);
+            border-radius: 35px;
+            padding: 20px;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+        }
+
+        .btn-glass {
+            border: none;
+            width: 55px; height: 55px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            backdrop-filter: blur(5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        .btn-glass:active { transform: scale(0.9) translateY(2px); }
+
+        /* 马卡龙色系定义 */
+        .btn-reset { background: var(--macaron-blue); color: #0369a1; }
+        .btn-record { 
+            width: 75px; height: 75px; 
+            background: var(--macaron-pink); 
+            box-shadow: 0 10px 25px rgba(251, 113, 133, 0.2);
+        }
+        .btn-save { background: var(--macaron-green); color: #15803d; opacity: 0.3; pointer-events: none; }
+        .btn-save.active { opacity: 1; pointer-events: auto; }
+
+        /* 录音状态图标 */
+        .rec-icon { width: 28px; height: 28px; background: #fb7185; border-radius: 50%; transition: 0.4s; }
+        .recording .rec-icon { border-radius: 8px; transform: scale(0.8); }
+
+        #export-canvas { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <div id="timer">00:00</div>
+
+    <div class="viz-group">
+        <!-- 实时波形 -->
+        <div class="viz-box"><canvas id="waveCanvas"></canvas></div>
+        <!-- 频谱图 -->
+        <div class="viz-box"><canvas id="specCanvas"></canvas></div>
+        <!-- 粒子动效 -->
+        <div class="viz-box"><canvas id="partCanvas"></canvas></div>
+    </div>
+
+    <div class="control-bar">
+        <button class="btn-glass btn-reset" onclick="location.reload()">↺</button>
+        
+        <button id="rec-btn" class="btn-glass btn-record">
+            <div class="rec-icon"></div>
+        </button>
+        
+        <div style="display: flex; gap: 12px;">
+            <button id="save-video" class="btn-glass btn-save">🎬</button>
+            <button id="save-image" class="btn-glass btn-save">🖼️</button>
+        </div>
+    </div>
+</div>
+
+<!-- 隐藏的合并录制画布 -->
+<canvas id="export-canvas" width="1080" height="1920"></canvas>
+
+<script>
+    let audioCtx, analyser, dataArray, stream;
+    let mediaRecorder, recordedChunks = [];
+    let isRecording = false, startTime, historyData = [];
+
+    const recBtn = document.getElementById('rec-btn');
+    const saveVideoBtn = document.getElementById('save-video');
+    const saveImageBtn = document.getElementById('save-image');
+    const timerDisplay = document.getElementById('timer');
+
+    // 画布 context
+    const canvases = {
+        wave: document.getElementById('waveCanvas').getContext('2d'),
+        spec: document.getElementById('specCanvas').getContext('2d'),
+        part: document.getElementById('partCanvas').getContext('2d'),
+        export: document.getElementById('export-canvas').getContext('2d')
+    };
+
+    function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        Object.keys(canvases).forEach(k => {
+            if(k === 'export') return;
+            const c = canvases[k].canvas;
+            c.width = c.clientWidth * dpr;
+            c.height = c.clientHeight * dpr;
+        });
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // 粒子系统逻辑
+    let particles = Array.from({length: 40}, () => ({
+        x: Math.random() * 400, y: Math.random() * 400,
+        vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, size: Math.random()*3+2
+    }));
+
+    recBtn.onclick = async () => {
+        if (!isRecording) {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const source = audioCtx.createMediaStreamSource(stream);
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 512;
+                source.connect(analyser);
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                isRecording = true;
+                startTime = Date.now();
+                historyData = [];
+                recBtn.classList.add('recording');
+                [saveVideoBtn, saveImageBtn].forEach(b => b.classList.remove('active'));
+                
+                startMediaRecorder();
+                render();
+                updateTimer();
+            } catch (e) { alert("麦克风启动失败，请检查 HTTPS 环境及权限"); }
+        } else {
+            stopRecording();
+        }
+    };
+
+    function startMediaRecorder() {
+        recordedChunks = [];
+        const captureStream = canvases.export.canvas.captureStream(30);
+        const combined = new MediaStream([...captureStream.getVideoTracks(), ...stream.getAudioTracks()]);
+        
+        // 兼容性修正：尝试寻找支持的视频格式
+        const types = ['video/webm;codecs=vp9', 'video/webm', 'video/mp4'];
+        const mimeType = types.find(t => MediaRecorder.isTypeSupported(t));
+        
+        mediaRecorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 5000000 });
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+            [saveVideoBtn, saveImageBtn].forEach(b => b.classList.add('active'));
+        };
+        mediaRecorder.start();
+    }
+
+    function stopRecording() {
+        isRecording = false;
+        mediaRecorder.stop();
+        stream.getTracks().forEach(t => t.stop());
+        recBtn.classList.remove('recording');
+    }
+
+    function render() {
+        if (!isRecording) return;
+        requestAnimationFrame(render);
+        analyser.getByteTimeDomainData(dataArray);
+        const freqData = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(freqData);
+
+        // 1. 波形绘制 (黑色极简线)
+        const wCtx = canvases.wave;
+        wCtx.clearRect(0, 0, wCtx.canvas.width, wCtx.canvas.height);
+        wCtx.strokeStyle = "#94a3b8"; wCtx.lineWidth = 3; wCtx.beginPath();
+        let x = 0; let step = wCtx.canvas.width / dataArray.length;
+        for(let i=0; i<dataArray.length; i++) {
+            let y = (dataArray[i]/255) * wCtx.canvas.height;
+            if(i===0) wCtx.moveTo(x, y); else wCtx.lineTo(x, y);
+            x += step;
+        }
+        wCtx.stroke();
+
+        // 2. 频谱绘制
+        const sCtx = canvases.spec;
+        sCtx.clearRect(0, 0, sCtx.canvas.width, sCtx.canvas.height);
+        sCtx.fillStyle = "#bae6fd";
+        let bw = sCtx.canvas.width / freqData.length;
+        for(let i=0; i<freqData.length; i++) {
+            let bh = (freqData[i]/255) * sCtx.canvas.height;
+            sCtx.fillRect(i*bw, sCtx.canvas.height - bh, bw-1, bh);
+        }
+
+        // 3. 粒子绘制
+        const pCtx = canvases.part;
+        pCtx.clearRect(0,0, pCtx.canvas.width, pCtx.canvas.height);
+        let energy = freqData.reduce((a,b)=>a+b,0)/freqData.length;
+        particles.forEach(p => {
+            p.x += p.vx * (1+energy/50); p.y += p.vy * (1+energy/50);
+            if(p.x<0 || p.x>pCtx.canvas.width) p.vx*=-1;
+            if(p.y<0 || p.y>pCtx.canvas.height) p.vy*=-1;
+            pCtx.fillStyle = "#fecdd3"; pCtx.beginPath(); pCtx.arc(p.x, p.y, p.size*(1+energy/100), 0, Math.PI*2); pCtx.fill();
+        });
+
+        // 4. 汇总到导出画布 (1080x1920)
+        drawExportFrame();
+
+        // 记录历史用于长图
+        historyData.push(energy);
+    }
+
+    function drawExportFrame() {
+        const ex = canvases.export;
+        ex.fillStyle = "#ffffff"; ex.fillRect(0,0,1080,1920);
+        // 将三个分屏同步绘制到大图中心
+        ex.drawImage(canvases.wave.canvas, 90, 400, 900, 300);
+        ex.drawImage(canvases.spec.canvas, 90, 750, 900, 300);
+        ex.drawImage(canvases.part.canvas, 90, 1100, 900, 400);
+    }
+
+    function updateTimer() {
+        if(!isRecording) return;
+        const diff = Math.floor((Date.now() - startTime)/1000);
+        const m = Math.floor(diff/60).toString().padStart(2,'0');
+        const s = (diff%60).toString().padStart(2,'0');
+        timerDisplay.innerText = `${m}:${s}`;
+        setTimeout(updateTimer, 500);
+    }
+
+    // 下载功能
+    saveVideoBtn.onclick = () => {
+        const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `AudioVisual_${Date.now()}.webm`; // 推荐用webm保证手机兼容
+        a.click();
+    };
+
+    saveImageBtn.onclick = () => {
+        const c = document.createElement('canvas');
+        c.width = 2400; c.height = 600;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = "white"; ctx.fillRect(0,0,c.width,c.height);
+        ctx.strokeStyle = "black"; ctx.lineWidth = 2; ctx.beginPath();
+        let step = c.width / historyData.length;
+        historyData.forEach((d, i) => {
+            let h = (d/128) * 200;
+            ctx.moveTo(i*step, 300-h); ctx.lineTo(i*step, 300+h);
+        });
+        ctx.stroke();
+        const a = document.createElement('a');
+        a.href = c.toDataURL('image/png');
+        a.download = 'Waveform.png';
+        a.click();
+    };
+</script>
+</body>
+</html>
