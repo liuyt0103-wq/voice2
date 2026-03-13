@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>频谱实验室 - 专业音频分析仪</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --accent-color: #4df0d0; /* 青色 */
+            --dim-color: #1a3a35;
+            --text-color: #4df0d0;
+            --record-red: #ff4b4b;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            /* 使用等宽字体保持科技感 */
+            font-family: 'Consolas', 'Monaco', 'PingFang SC', 'Microsoft YaHei', monospace;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            text-transform: uppercase;
+        }
+
+        #app-container {
+            width: 360px;
+            height: 760px;
+            border: 2px solid #222;
+            border-radius: 45px;
+            padding: 25px;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 80px rgba(0,0,0,0.8);
+            position: relative;
+        }
+
+        /* 顶部状态栏 */
+        .header { margin-bottom: 20px; }
+        .brand { 
+            font-weight: 900; 
+            font-size: 1.1rem; 
+            display: flex; 
+            justify-content: space-between; 
+            letter-spacing: 1px;
+        }
+        .rec-indicator { font-size: 0.8rem; color: #555; transition: 0.3s; }
+        .rec-active { color: var(--record-red); }
+
+        /* 音量条 */
+        .audio-level-container { margin: 15px 0; }
+        .label { font-size: 0.7rem; margin-bottom: 6px; color: var(--text-color); opacity: 0.8; letter-spacing: 1px;}
+        .level-bar-bg { height: 16px; background: var(--dim-color); width: 100%; position: relative; border-radius: 2px; }
+        #level-bar-fill { height: 100%; background: var(--accent-color); width: 0%; transition: width 0.1s; }
+
+        /* 控制按钮 */
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 25px;
+            margin: 15px 0 25px 0;
+        }
+
+        .btn-circle {
+            width: 48px; height: 48px;
+            border-radius: 50%;
+            border: 1px solid var(--accent-color);
+            background: transparent;
+            color: var(--accent-color);
+            cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 1.2rem;
+            transition: 0.2s;
+        }
+        .btn-circle:active { transform: scale(0.9); background: var(--dim-color); }
+
+        #record-btn {
+            width: 75px; height: 75px;
+            background: var(--record-red);
+            border: none;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9rem;
+            box-shadow: 0 0 15px rgba(255, 75, 75, 0.3);
+        }
+
+        /* 可视化区域 */
+        .viz-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .canvas-box {
+            border: 1px solid #111;
+            position: relative;
+            background: rgba(10, 10, 10, 0.8);
+            border-radius: 4px;
+        }
+
+        canvas { width: 100%; height: 95px; display: block; }
+        .canvas-label { 
+            position: absolute; top: 4px; left: 6px; 
+            font-size: 0.6rem; color: var(--accent-color); 
+            opacity: 0.7; z-index: 10;
+        }
+
+        /* 数据显示 */
+        .stats {
+            font-size: 0.75rem;
+            line-height: 1.6;
+            margin-top: 15px;
+            padding: 10px;
+            border-top: 1px solid #111;
+            color: var(--accent-color);
+        }
+        .stats b { color: #fff; font-weight: normal; }
+
+        .footer {
+            text-align: center;
+            font-size: 0.6rem;
+            margin-top: 10px;
+            opacity: 0.4;
+            letter-spacing: 2px;
+        }
+
+        /* 动画 */
+        .blink { animation: blink-animation 1s steps(5, start) infinite; }
+        @keyframes blink-animation { to { visibility: hidden; } }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <div class="header">
+        <div class="brand">
+            <span>频谱实验室 SPECTRALAB</span>
+            <span id="rec-status" class="rec-indicator">● 录制中</span>
+        </div>
+        <div class="audio-level-container">
+            <div class="label">输入电平 <span id="db-value" style="float:right">-80.0 DB</span></div>
+            <div class="level-bar-bg">
+                <div id="level-bar-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-circle" title="设置">⚙</button>
+        <button id="record-btn" class="btn-circle">开始解析</button>
+        <button class="btn-circle" title="切换模式">♒</button>
+    </div>
+
+    <div class="viz-section">
+        <!-- 时域波形 -->
+        <div class="canvas-box">
+            <div class="canvas-label">实时波形 (WAVEFORM)</div>
+            <canvas id="waveformCanvas"></canvas>
+        </div>
+        
+        <!-- 频谱图 -->
+        <div class="canvas-box">
+            <div class="canvas-label">频谱解析 (SPECTRUM)</div>
+            <canvas id="spectrumCanvas"></canvas>
+        </div>
+        
+        <!-- 粒子系统 -->
+        <div class="canvas-box" style="height: 140px;">
+            <div class="canvas-label">频率粒子 (PARTICLES)</div>
+            <canvas id="particleCanvas" style="height: 140px;"></canvas>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div>峰值频率: <b id="peak-hz">0.0 HZ</b></div>
+        <div>主导频段: <b id="dom-hz">129, 86, 43 HZ</b></div>
+        <div>频带能量: 低:<b id="band-l">-0.0</b> 中:<b id="band-m">-0.0</b> 高:<b id="band-h">-0.0</b></div>
+    </div>
+
+    <div class="footer">
+        系统状态: 保持常亮
+    </div>
+</div>
+
+<script>
+    let audioCtx;
+    let analyser;
+    let source;
+    let dataArray;
+    let bufferLength;
+    let isRecording = false;
+
+    const recordBtn = document.getElementById('record-btn');
+    const levelFill = document.getElementById('level-bar-fill');
+    const dbValue = document.getElementById('db-value');
+    const recStatus = document.getElementById('rec-status');
+    
+    // 画布初始化
+    const waveCanvas = document.getElementById('waveformCanvas');
+    const specCanvas = document.getElementById('spectrumCanvas');
+    const partCanvas = document.getElementById('particleCanvas');
+    const waveCtx = waveCanvas.getContext('2d');
+    const specCtx = specCanvas.getContext('2d');
+    const partCtx = partCanvas.getContext('2d');
+
+    function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        [waveCanvas, specCanvas, partCanvas].forEach(c => {
+            c.width = c.clientWidth * dpr;
+            c.height = c.clientHeight * dpr;
+        });
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // 粒子逻辑
+    class Particle {
+        constructor() {
+            this.reset();
+        }
+        reset() {
+            this.x = Math.random() * partCanvas.width;
+            this.y = Math.random() * partCanvas.height;
+            this.vx = (Math.random() - 0.5) * 1.5;
+            this.vy = (Math.random() - 0.5) * 1.5;
+            this.size = Math.random() * 2 + 1;
+        }
+        update(energy) {
+            const speedScale = 1 + (energy / 30);
+            this.x += this.vx * speedScale;
+            this.y += this.vy * speedScale;
+
+            if(this.x < 0 || this.x > partCanvas.width) this.vx *= -1;
+            if(this.y < 0 || this.y > partCanvas.height) this.vy *= -1;
+        }
+        draw(ctx) {
+            ctx.fillStyle = '#4df0d0';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    const particles = Array.from({length: 50}, () => new Particle());
+
+    // 按钮交互
+    recordBtn.onclick = async () => {
+        if (!isRecording) {
+            try {
+                await startAudio();
+                recordBtn.innerText = "停止解析";
+                recordBtn.style.background = "#222";
+                recStatus.classList.add('rec-active', 'blink');
+                isRecording = true;
+            } catch (err) {
+                alert("无法访问麦克风: " + err);
+            }
+        } else {
+            location.reload(); 
+        }
+    };
+
+    async function startAudio() {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        source = audioCtx.createMediaStreamSource(stream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 1024; // 采样率
+        source.connect(analyser);
+
+        bufferLength = analyser.frequencyBinCount;
+        dataArray = new Uint8Array(bufferLength);
+        
+        renderFrame();
+    }
+
+    function renderFrame() {
+        requestAnimationFrame(renderFrame);
+        const timeData = new Uint8Array(bufferLength);
+        analyser.getByteTimeDomainData(timeData);
+        analyser.getByteFrequencyData(dataArray);
+
+        // 1. 计算分贝 (DB)
+        let sum = 0;
+        for(let i=0; i<bufferLength; i++) {
+            let val = (timeData[i] - 128) / 128;
+            sum += val * val;
+        }
+        let rms = Math.sqrt(sum / bufferLength);
+        let db = 20 * Math.log10(rms || 0.000001);
+        let displayDb = Math.max(-80, db.toFixed(1));
+        levelFill.style.width = Math.min(100, (db + 80) * 1.25) + "%";
+        dbValue.innerText = displayDb + " DB";
+
+        // 2. 绘制波形图 (Waveform)
+        waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+        waveCtx.strokeStyle = '#4df0d0';
+        waveCtx.lineWidth = 2;
+        waveCtx.beginPath();
+        let sliceWidth = waveCanvas.width / bufferLength;
+        let wx = 0;
+        for(let i = 0; i < bufferLength; i++) {
+            let v = timeData[i] / 128.0;
+            let wy = v * waveCanvas.height / 2;
+            if(i === 0) waveCtx.moveTo(wx, wy);
+            else waveCtx.lineTo(wx, wy);
+            wx += sliceWidth;
+        }
+        waveCtx.stroke();
+
+        // 3. 绘制频谱图 (Spectrum)
+        specCtx.clearRect(0, 0, specCanvas.width, specCanvas.height);
+        let barWidth = (specCanvas.width / (bufferLength / 2));
+        let sx = 0;
+        for(let i = 0; i < bufferLength / 2; i++) {
+            let barHeight = (dataArray[i] / 255) * specCanvas.height;
+            specCtx.fillStyle = `rgba(77, 240, 208, ${dataArray[i]/255 + 0.2})`;
+            specCtx.fillRect(sx, specCanvas.height - barHeight, barWidth - 1, barHeight);
+            sx += barWidth;
+        }
+
+        // 4. 绘制粒子动效 (Particles)
+        partCtx.fillStyle = 'rgba(5, 5, 5, 0.3)'; // 拖尾效果
+        partCtx.fillRect(0, 0, partCanvas.width, partCanvas.height);
+        let avgEnergy = dataArray.reduce((a,b) => a+b, 0) / bufferLength;
+        particles.forEach(p => {
+            p.update(avgEnergy);
+            p.draw(partCtx);
+        });
+
+        // 5. 更新数据看板
+        updateDataStats(dataArray);
+    }
+
+    function updateDataStats(data) {
+        // 查找峰值
+        let maxVal = 0, maxIdx = 0;
+        for(let i=0; i<data.length/2; i++) {
+            if(data[i] > maxVal) { maxVal = data[i]; maxIdx = i; }
+        }
+        let peakHz = maxIdx * audioCtx.sampleRate / analyser.fftSize;
+        document.getElementById('peak-hz').innerText = peakHz.toFixed(1) + " HZ";
+
+        // 简化计算低中高频段能量
+        let l = (data.slice(0, 5).reduce((a,b)=>a+b,0)/5).toFixed(1);
+        let m = (data.slice(20, 50).reduce((a,b)=>a+b,0)/30).toFixed(1);
+        let h = (data.slice(100, 200).reduce((a,b)=>a+b,0)/100).toFixed(1);
+        
+        document.getElementById('band-l').innerText = (l/10).toFixed(1);
+        document.getElementById('band-m').innerText = (m/10).toFixed(1);
+        document.getElementById('band-h').innerText = (h/10).toFixed(1);
+    }
+</script>
+
+</body>
+</html>
