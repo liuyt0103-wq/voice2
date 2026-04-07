@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acoustic Organism</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/meyda/dist/web/meyda.min.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/ccapture.js@1.1.0/build/CCapture.all.min.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #error-display {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: red;
+            font-size: 10px;
+            max-width: 200px;
+            z-index: 1000;
+            pointer-events: none;
+            display: none;
+        }
+
+        #data-overlay {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            z-index: 100;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+
+        .data-bar-bg {
+            width: 120px;
+            height: 2px;
+            background: #f0f0f0;
+            position: relative;
+        }
+
+        .data-bar-fill {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            background: #000;
+            width: 0%;
+            transition: width 0.1s ease;
+        }
+
+        .data-label {
+            font-size: 8px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #aaa;
+        }
+
+        #start-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            cursor: pointer;
+        }
+
+        .start-circle {
+            width: 80px;
+            height: 80px;
+            border: 2px solid #000;
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+        }
+
+        #start-overlay:hover .start-circle {
+            transform: scale(1.1);
+        }
+
+        #ui-container {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        #ui-container.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .controls-row {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+        }
+
+        .icon-button {
+            background: none;
+            border: 2px solid #000;
+            border-radius: 50%;
+            width: 56px;
+            height: 56px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 0;
+            outline: none;
+        }
+
+        .icon-button:hover {
+            background-color: #f0f0f0;
+            transform: scale(1.05);
+        }
+
+        .icon-button:active {
+            transform: scale(0.95);
+        }
+
+        .icon-button.recording {
+            border-color: #ff4444;
+            background-color: #ff4444;
+        }
+
+        .icon-button svg {
+            width: 24px;
+            height: 24px;
+            fill: none;
+            stroke: #000;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .icon-button.recording svg {
+            stroke: #fff;
+            fill: #fff;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .slider-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 1px solid #ccc;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 120px;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #000;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        #recording-indicator {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #ff4444;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #recording-indicator.active {
+            opacity: 1;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.5); }
+            100% { transform: translateX(-50%) scale(1); }
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        /* Hide text-like elements if any accidentally appear */
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="error-display"></div>
+    <div id="recording-indicator"></div>
+
+    <div id="start-overlay">
+        <div class="start-circle"></div>
+    </div>
+
+    <div id="data-overlay">
+        <div class="data-item">
+            <div class="data-label">RMS (ENERGY)</div>
+            <div class="data-bar-bg"><div id="bar-rms" class="data-bar-fill"></div></div>
+        </div>
+        <div class="data-item">
+            <div class="data-label">ZCR (TIME FLOW)</div>
+            <div class="data-bar-bg"><div id="bar-zcr" class="data-bar-fill"></div></div>
+        </div>
+        <div class="data-item">
+            <div class="data-label">SPREAD (COMPLEXITY)</div>
+            <div class="data-bar-bg"><div id="bar-spread" class="data-bar-fill"></div></div>
+        </div>
+        <div class="data-item">
+            <div class="data-label">ROLLOFF (CURVATURE)</div>
+            <div class="data-bar-bg"><div id="bar-rolloff" class="data-bar-fill"></div></div>
+        </div>
+    </div>
+
+    <div id="ui-container">
+        <div class="controls-row">
+            <div class="slider-container">
+                <div class="slider-icon" style="background: linear-gradient(to right, red, yellow, green, cyan, blue, magenta);"></div>
+                <input type="range" id="hue-slider" min="0" max="360" value="200">
+            </div>
+            
+            <button id="record-btn" class="icon-button">
+                <svg viewBox="0 0 24 24" id="record-icon">
+                    <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+            </button>
+
+            <button id="download-btn" class="icon-button">
+                <svg viewBox="0 0 24 24">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+            </button>
+
+            <div class="slider-container">
+                <div class="slider-icon" style="background: #888; border-radius: 4px; transform: scaleY(0.5);"></div>
+                <input type="range" id="deform-slider" min="0.1" max="3" step="0.1" value="1">
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // Global error handler for debugging "Script error"
+        window.onerror = function(message, source, lineno, colno, error) {
+            const display = document.getElementById('error-display');
+            display.style.display = 'block';
+            display.innerText = `Error: ${message}\nSource: ${source}\nLine: ${lineno}`;
+            console.error(message, source, lineno, colno, error);
+            return false;
+        };
+
+        let mic, recorder, soundFile;
+        let isRecording = false;
+        let meydaAnalyzer;
+        let audioContext;
+        
+        // Acoustic features (averages)
+        let avgRMS = 0.1;
+        let avgZCR = 0.1;
+        let avgSpread = 1000;
+        let avgRolloff = 1000;
+        
+        // Current values for animation (lerped)
+        let targetRMS = 0.1;
+        let targetZCR = 0.1;
+        let targetSpread = 1000;
+        let targetRolloff = 1000;
+        
+        let currentRMS = 0.1;
+        let currentZCR = 0.1;
+        let currentSpread = 1000;
+        let currentRolloff = 1000;
+
+        // Accumulators for averaging
+        let frameCountAudio = 0;
+        let sumRMS = 0;
+        let sumZCR = 0;
+        let sumSpread = 0;
+        let sumRolloff = 0;
+
+        // Visual parameters
+        let baseHue = 200;
+        let deformMult = 1;
+        
+        // Loop parameters
+        const LOOP_FRAMES = 90;
+        let loopRadius = 0.5;
+
+        // Capture
+        let capturer = null;
+        let isCapturing = false;
+        let captureFrameCount = 0;
+        const TOTAL_CAPTURE_FRAMES = 90;
+
+        function setup() {
+            const canvas = createCanvas(windowWidth, windowHeight, WEBGL);
+            canvas.parent('canvas-container');
+            
+            colorMode(HSB, 360, 100, 100, 1);
+            smooth();
+
+            // Audio Setup (p5.sound)
+            try {
+                mic = new p5.AudioIn();
+                recorder = new p5.SoundRecorder();
+                recorder.setInput(mic);
+                soundFile = new p5.SoundFile();
+            } catch (e) {
+                console.error("Audio initialization failed:", e);
+            }
+
+            // Start Overlay Listener
+            document.getElementById('start-overlay').addEventListener('click', () => {
+                userStartAudio().then(() => {
+                    mic.start(() => {
+                        document.getElementById('start-overlay').style.display = 'none';
+                        document.getElementById('ui-container').classList.add('active');
+                        setTimeout(() => {
+                            startMeyda();
+                        }, 200);
+                    });
+                });
+            });
+
+            // UI Listeners
+            document.getElementById('record-btn').addEventListener('click', toggleRecording);
+            document.getElementById('download-btn').addEventListener('click', startCapture);
+            document.getElementById('hue-slider').addEventListener('input', (e) => baseHue = parseFloat(e.target.value));
+            document.getElementById('deform-slider').addEventListener('input', (e) => deformMult = parseFloat(e.target.value));
+        }
+
+        function toggleRecording() {
+            if (!isRecording) {
+                recorder.record(soundFile);
+                isRecording = true;
+                document.getElementById('record-btn').classList.add('recording');
+                document.getElementById('recording-indicator').classList.add('active');
+                
+                // Reset accumulators
+                frameCountAudio = 0;
+                sumRMS = 0;
+                sumZCR = 0;
+                sumSpread = 0;
+                sumRolloff = 0;
+            } else {
+                recorder.stop();
+                isRecording = false;
+                document.getElementById('record-btn').classList.remove('recording');
+                document.getElementById('recording-indicator').classList.remove('active');
+
+                // Final averages for the "static" state
+                if (frameCountAudio > 0) {
+                    avgRMS = sumRMS / frameCountAudio;
+                    avgZCR = sumZCR / frameCountAudio;
+                    avgSpread = sumSpread / frameCountAudio;
+                    avgRolloff = sumRolloff / frameCountAudio;
+                }
+            }
+        }
+
+        function startMeyda() {
+            try {
+                if (!audioContext) {
+                    audioContext = getAudioContext();
+                }
+                
+                if (!mic.stream) {
+                    console.error("Mic stream not available for Meyda");
+                    return;
+                }
+
+                const source = audioContext.createMediaStreamSource(mic.stream);
+                
+                meydaAnalyzer = Meyda.createMeydaAnalyzer({
+                    audioContext: audioContext,
+                    source: source,
+                    bufferSize: 512,
+                    featureExtractors: ["rms", "zcr", "spectralSpread", "spectralRolloff"],
+                    callback: (features) => {
+                        const rms = features.rms || 0;
+                        const zcr = features.zcr || 0;
+                        const spread = features.spectralSpread || 0;
+                        const rolloff = features.spectralRolloff || 0;
+
+                        // Real-time targets (always active)
+                        targetRMS = map(rms, 0, 0.15, 0.05, 1.2, true);
+                        targetZCR = map(zcr, 0, 0.2, 0.1, 2.5, true);
+                        targetSpread = map(spread, 0, 100, 0.5, 3.0, true);
+                        targetRolloff = map(rolloff, 0, 10000, 0.5, 3.0, true);
+
+                        // Update UI Bars (always active)
+                        document.getElementById('bar-rms').style.width = `${map(rms, 0, 0.15, 0, 100, true)}%`;
+                        document.getElementById('bar-zcr').style.width = `${map(zcr, 0, 0.2, 0, 100, true)}%`;
+                        document.getElementById('bar-spread').style.width = `${map(spread, 0, 100, 0, 100, true)}%`;
+                        document.getElementById('bar-rolloff').style.width = `${map(rolloff, 0, 10000, 0, 100, true)}%`;
+
+                        if (isRecording) {
+                            // Accumulate for final average
+                            sumRMS += rms;
+                            sumZCR += zcr;
+                            sumSpread += spread;
+                            sumRolloff += rolloff;
+                            frameCountAudio++;
+                        }
+                    }
+                });
+                meydaAnalyzer.start();
+            } catch (e) {
+                console.error("Meyda start failed:", e);
+            }
+        }
+
+        let loopAngle = 0;
+
+        function draw() {
+            background(0, 0, 100); // Pure white
+
+            // Lerp values for smooth transitions
+            currentRMS = lerp(currentRMS, targetRMS, 0.1);
+            currentZCR = lerp(currentZCR, targetZCR, 0.1);
+            currentSpread = lerp(currentSpread, targetSpread, 0.1);
+            currentRolloff = lerp(currentRolloff, targetRolloff, 0.1);
+
+            // Time flow speed controlled by ZCR
+            if (currentRMS > 0.04) {
+                loopAngle += currentZCR * 0.05;
+            }
+
+            // Draw the Moire Pattern
+            drawMoire();
+
+            // Capture logic
+            if (isCapturing) {
+                capturer.capture(document.getElementById('defaultCanvas0'));
+                captureFrameCount++;
+                if (captureFrameCount >= TOTAL_CAPTURE_FRAMES) {
+                    isCapturing = false;
+                    capturer.stop();
+                    capturer.save();
+                    document.getElementById('download-btn').style.opacity = "1";
+                }
+            }
+        }
+
+        function drawMoire() {
+            // Center the coordinate system
+            translate(-width/2, -height/2);
+            
+            // Letterbox layout: constrain drawing to a central horizontal band
+            const bandHeight = height * 0.7;
+            const yStart = (height - bandHeight) / 2;
+            const yEnd = yStart + bandHeight;
+
+            // Increase line count for better moire density
+            const lineCount = 240; 
+            const spacing = width / lineCount;
+            
+            // Thicker lines for more "ink" feel
+            strokeWeight(1.8);
+            noFill();
+
+            // Perfect loop logic
+            let tx = cos(loopAngle) * 0.6;
+            let ty = sin(loopAngle) * 0.6;
+
+            // RMS affects the "depth" of the folds
+            const foldDepth = currentRMS * 400 * deformMult;
+            
+            // Spread affects the "frequency" of folds (how many creases)
+            const foldFreq = 0.001 + (currentSpread * 0.003);
+            
+            // Rolloff affects the "sharpness" of the folds
+            const sharpness = map(currentRolloff, 0.5, 3.0, 1, 4);
+
+            for (let i = 0; i <= lineCount; i++) {
+                let xBase = i * spacing;
+                
+                // High contrast color (deep indigo/black)
+                let h = (baseHue + map(i, 0, lineCount, -10, 10)) % 360;
+                stroke(h, 80, 20); 
+
+                beginShape();
+                for (let y = yStart; y <= yEnd; y += 10) {
+                    // Use noise to create a displacement field
+                    // We sample noise based on the base position
+                    let n = noise(xBase * foldFreq + tx, y * foldFreq + ty, i * 0.002);
+                    
+                    // Physical "folding" effect:
+                    // We raise the noise to a power (sharpness) to create steeper gradients (creases)
+                    let fold = Math.pow(n, sharpness);
+                    
+                    // Displacement that creates clustering (density)
+                    // Lines "pull" towards the peaks of the noise
+                    let xOffset = (fold - 0.5) * foldDepth;
+                    
+                    // Add a secondary "stretch" based on ZCR/Time
+                    xOffset += sin(y * 0.008 + loopAngle) * (currentZCR * 15);
+
+                    vertex(xBase + xOffset, y);
+                }
+                endShape();
+            }
+        }
+
+        function getBlobVertex(lat, lon, radius, freq, disp, tx, ty) {
+            let x = sin(lat) * cos(lon);
+            let y = sin(lat) * sin(lon);
+            let z = cos(lat);
+            
+            // 3D Perlin Noise with 2D circular time component for perfect looping
+            let n = noise(x * freq + tx, y * freq + ty, z * freq);
+            let d = radius + n * disp;
+            
+            return createVector(x * d, y * d, z * d);
+        }
+
+        function startCapture() {
+            if (isCapturing) return;
+            
+            document.getElementById('download-btn').style.opacity = "0.3";
+            
+            capturer = new CCapture({
+                format: 'png',
+                framerate: 30,
+                verbose: false
+            });
+            
+            isCapturing = true;
+            captureFrameCount = 0;
+            capturer.start();
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+    </script>
+</body>
+</html>
